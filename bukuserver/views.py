@@ -318,7 +318,11 @@ class BookmarkModelView(BaseModelView, ApplyFiltersMixin):
     def swap(self):
         form = forms.SwapForm()
         self.bukudb.swap_recs(form.id1.data, form.id2.data)
-        return redirect(request.form.get('url', url_for('bookmark.index_view')))
+        # Prevent open redirect: validate URL is relative
+        redirect_url = request.form.get('url', url_for('bookmark.index_view'))
+        if redirect_url.startswith('//') or '://' in redirect_url:
+            redirect_url = url_for('bookmark.index_view')
+        return redirect(redirect_url)
 
     def scaffold_list_columns(self):
         return [x.name.lower() for x in BookmarkField]
