@@ -2885,7 +2885,7 @@ class BukuDb:
                     add_parent_folder_as_tag):
                 self.add_rec(*item)
 
-    def auto_import_from_browser(self, firefox_profile=None):
+    def auto_import_from_browser(self, firefox_profile=None, firefox_profiles_dir=None):
         """Import bookmarks from a browser default database file.
 
         Supports Firefox, Google Chrome, Chromium, Vivaldi, Brave, and MS Edge.
@@ -2902,27 +2902,29 @@ class BukuDb:
             vi_bm_db_path = '~/.config/vivaldi/Default/Bookmarks'
             br_bm_db_path = '~/.config/BraveSoftware/Brave-Browser/Default/Bookmarks'
             me_bm_db_path = '~/.config/microsoft-edge/Default/Bookmarks'
-            default_ff_folder = '~/.mozilla/firefox'
+            _xdg_config = os.getenv('XDG_CONFIG_HOME') or '~/.config'
+            default_ff_folders = ['~/.mozilla/firefox', os.path.join(_xdg_config, 'mozilla/firefox')]
         elif sys.platform == 'darwin':
             gc_bm_db_path = '~/Library/Application Support/Google/Chrome/Default/Bookmarks'
             cb_bm_db_path = '~/Library/Application Support/Chromium/Default/Bookmarks'
             vi_bm_db_path = '~/Library/Application Support/Vivaldi/Default/Bookmarks'
             br_bm_db_path = '~/Library/Application Support/BraveSoftware/Brave-Browser/Default/Bookmarks'
             me_bm_db_path = '~/Library/Application Support/Microsoft Edge/Default/Bookmarks'
-            default_ff_folder = '~/Library/Application Support/Firefox'
+            default_ff_folders = ['~/Library/Application Support/Firefox']
         elif sys.platform == 'win32':
             gc_bm_db_path = os.path.expandvars('%LOCALAPPDATA%/Google/Chrome/User Data/Default/Bookmarks')
             cb_bm_db_path = os.path.expandvars('%LOCALAPPDATA%/Chromium/User Data/Default/Bookmarks')
             vi_bm_db_path = os.path.expandvars('%LOCALAPPDATA%/Vivaldi/User Data/Default/Bookmarks')
             br_bm_db_path = os.path.expandvars('%LOCALAPPDATA%/BraveSoftware/Brave-Browser/User Data/Default/Bookmarks')
             me_bm_db_path = os.path.expandvars('%LOCALAPPDATA%/Microsoft/Edge/User Data/Default/Bookmarks')
-            default_ff_folder = os.path.expandvars('%APPDATA%/Mozilla/Firefox/')
+            default_ff_folders = [os.path.expandvars('%APPDATA%/Mozilla/Firefox/')]
         else:
             LOGERR('buku does not support {} yet'.format(sys.platform))
             self.close_quit(1)
             return  # clarifying execution interrupt for the linter
 
-        ff_bm_db_paths = get_firefox_db_paths(default_ff_folder, firefox_profile)
+        ff_folders = ([firefox_profiles_dir] if firefox_profiles_dir else default_ff_folders)
+        ff_bm_db_paths = get_firefox_db_paths(*ff_folders, specified=firefox_profile)
 
         if self.chatty:
             resp = input('Generate auto-tag (YYYYMonDD)? (y/n): ')
@@ -3606,10 +3608,14 @@ def get_firefox_profile_names(path):
     LOGDBG('get_firefox_profile_names(): {} does not exist'.format(path))
     return profiles
 
-def get_firefox_db_paths(default_ff_folder, specified=None):
-    profiles = ([specified] if specified else get_firefox_profile_names(default_ff_folder))
-    _profile_path = lambda s: (s if os.path.isabs(s) else os.path.join(default_ff_folder, s))
-    return {s: os.path.join(_profile_path(s), 'places.sqlite') for s in profiles}
+def get_firefox_db_paths(*default_ff_folders, specified=None):
+    _profile_path = lambda f, s: (s if os.path.isabs(s) else os.path.join(f, s))
+    result = {}
+    for folder in default_ff_folders:
+        profiles = ([specified] if specified else get_firefox_profile_names(folder))
+        result.update({s: os.path.join(_profile_path(folder, s), 'places.sqlite')
+                       for s in profiles if s not in result})
+    return result
 
 
 def walk(root):
@@ -5998,7 +6004,9 @@ POSITIONAL ARGUMENTS:
         description='''    --ai                 auto-import bookmarks from web browsers
                          Firefox, Chrome, Chromium, Vivaldi, Brave, Edge
                          (Firefox profile can be specified using
-                         environment variable FIREFOX_PROFILE)
+                         environment variable FIREFOX_PROFILE;
+                         Firefox profiles directory can be specified using
+                         environment variable FIREFOX_PROFILES_DIR)
     -e, --export file    export bookmarks to Firefox format HTML
                          export XBEL, if file ends with '.xbel'
                          export Markdown, if file ends with '.md'
@@ -6520,7 +6528,8 @@ POSITIONAL ARGUMENTS:
 
     # Import bookmarks from browser
     if args.ai:
-        bdb.auto_import_from_browser(firefox_profile=os.environ.get('FIREFOX_PROFILE'))
+        bdb.auto_import_from_browser(firefox_profile=os.environ.get('FIREFOX_PROFILE'),
+                                     firefox_profiles_dir=os.environ.get('FIREFOX_PROFILES_DIR'))
 
     # Open URL in browser
     if args.open is not None:

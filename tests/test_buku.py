@@ -908,17 +908,22 @@ def test_get_firefox_profile_names(_os_path_exists, profiles, expected):
         assert buku.get_firefox_profile_names('') == expected
 
 @pytest.mark.parametrize('profiles, specified, expected', [
-    (['foo', '/bar/baz'], None, {
+    ({'~/profiles': ['foo', '/bar/baz']}, None, {
         'foo': os.path.join('~/profiles', 'foo', 'places.sqlite'),
         '/bar/baz': os.path.join('/bar/baz', 'places.sqlite'),
     }),
-    (['foo', '/bar/baz'], 'qux', {'qux': os.path.join('~/profiles', 'qux', 'places.sqlite')}),
-    ([], '/grue/xyzzy', {'/grue/xyzzy': os.path.join('/grue/xyzzy', 'places.sqlite')}),
+    ({'~/profiles': ['foo', '/bar/baz']}, 'qux', {'qux': os.path.join('~/profiles', 'qux', 'places.sqlite')}),
+    ({'~/profiles': []}, '/grue/xyzzy', {'/grue/xyzzy': os.path.join('/grue/xyzzy', 'places.sqlite')}),
+    ({'~/profiles': ['foo', 'bar'], '~/.config/profiles': ['foo', 'baz']}, None, {
+        'foo': os.path.join('~/profiles', 'foo', 'places.sqlite'),  # for collisions, prefer 1st dir
+        'bar': os.path.join('~/profiles', 'bar', 'places.sqlite'),
+        'baz': os.path.join('~/.config/profiles', 'baz', 'places.sqlite'),
+    }),
 ])
 def test_get_firefox_db_paths(profiles, specified, expected):
-    with mock.patch('buku.get_firefox_profile_names', return_value=profiles):
+    with mock.patch('buku.get_firefox_profile_names', side_effect=profiles.values()):
         import buku
-        assert buku.get_firefox_db_paths('~/profiles', specified) == expected
+        assert buku.get_firefox_db_paths(*profiles.keys(), specified=specified) == expected
 
 
 @pytest.mark.parametrize(
