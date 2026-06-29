@@ -607,11 +607,13 @@ class BukuDb:
         """Converts field list to ordering parameters (for DB query or entity list sorting).
         Fields are listed in priority order, with '+'/'-' prefix signifying ASC/DESC; assuming ASC if not specified.
         Other than names from DB, you can pass those from JSON export."""
+        fields = list(fields or [])  # handling nils and generators
         _field = lambda s: re.sub(r'^[+-]?(#)? *', r'\1', s).rstrip().lower()
-        tags = {_field(s) for s in (fields or []) if re.fullmatch(r'[+-]?#[^,]+', s)}
+        tags = {_field(s) for s in fields if re.fullmatch(r'[+-]?#[^,]+', s)}
         names = {'index': 'id', 'uri': 'url', 'description': 'desc', **({'title': 'metadata'} if for_db else {'metadata': 'title'})}
         valid = list(names) + list(names.values()) + ['tags', 'netloc'] + list(tags)
-        _fields = [(_field(s), not s.startswith('-')) for s in (fields or [])]
+        LOGDBG('ordering: fields=%s, valid=%s', fields, valid)
+        _fields = [(_field(s), not s.startswith('-')) for s in fields]
         _fields = [(names.get(field, field), direction) for field, direction in _fields if field in valid]
         return _fields or [('id', True)]
 
@@ -4779,12 +4781,15 @@ def prompt(obj, results, noninteractive=False, deep=False, listtags=False, sugge
             _fields = {'metadata': 'title', **JSON_FIELDS}
             _order = bdb._ordering(filter(None, re.split(r'[,\s]+', nav[2:].strip())))
             order_ = [('+' if asc else '-') + _fields.get(s, s) for s, asc in _order]
-            if nav.startswith('v '):
-                order = order_
-                print('order', ', '.join(order))
-            else:
+            if nav.startswith('v! '):
                 bdb.reorder(order_)
                 print('Reindexed bookmarks to match order:', ', '.join(order_))
+            else:
+                order = order_
+                print('order', ', '.join(order))
+                if results:
+                    results = bdb._sort(results, order)
+                    cur_index = next_index = 0
             continue
 
         # Toggle GUI browser with 'O'

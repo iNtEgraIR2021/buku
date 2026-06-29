@@ -1703,6 +1703,19 @@ def test_sort_and_reorder(bukuDb, fields, ignore_case, expected):
     bdb.reorder(fields, ignore_case=ignore_case)
     assert [x.url for x in bdb.get_rec_all()] == expected
 
+
+@pytest.mark.parametrize('fields, for_db, expected', [
+    (lambda: filter(None, ['url']), True, [('url', True)]),
+    (lambda: filter(None, ['+url', '-id']), True, [('url', True), ('id', False)]),
+    (lambda: None, True, [('id', True)]),
+    (lambda: [], True, [('id', True)]),
+    (lambda: ['+title'], False, [('title', True)]),
+    (lambda: ['+title'], True, [('metadata', True)]),
+])
+def test_ordering(bukuDb, fields, for_db, expected):
+    assert bukuDb()._ordering(fields(), for_db=for_db) == expected
+
+
 @pytest.mark.parametrize('ignore_case, fields, expected', [
     (True, ['+id'], 'id ASC'),
     (True, [], 'id ASC'),
